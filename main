@@ -1,0 +1,400 @@
+UDP:
+-------------
+UDP_CLIENT::
+-----------------
+
+import socket
+
+udpcli = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+server_add = ('127.0.0.1', 3136)
+
+user_input = input("Enter something: ")
+udpcli.sendto(user_input.encode('utf-8'), server_add)
+
+data, server = udpcli.recvfrom(1024)
+print(f"Received message from {server}: {data.decode('utf-8')}")
+
+udpcli.close()
+
+--------------------------------------------------------------------
+UDP_SERVER::
+---------------
+
+import socket
+
+udpser = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+server_add = ('127.0.0.1',3136)
+
+udpser.bind(server_add)
+
+print(f"UDP server is listening on {server_add}")
+
+while True:
+    data, client = udpser.recvfrom(1024)
+    print(f"Received message from {client}: {data.decode('utf-8')}")
+
+    response = b"Thankyou for connecting with us!!"
+    udpser.sendto(response, client)
+
+
+-----------------------------------------------------------------------
+FTP
+
+FTP SERVER:
+-------------
+
+import socket
+server=socket.socket()
+server_add=('127.0.0.1',3137)
+server.bind(server_add)
+server.listen()
+print("Server listening")
+while True:
+    conn,addr=server.accept()
+    print("Connection Accepted")
+    data=conn.recv(1024).decode('utf-8')
+    fo=open("output.txt","w")
+    print("File Received")
+    fo.write(data)
+    fo.close()
+    conn.close()
+
+-------------------------------------------------------------
+FTP_CLIENT::
+---------------
+
+import socket
+client=socket.socket()
+server_add=('127.0.0.1',3137)
+client.connect(server_add)
+print("Connected to server")
+fi=open("input.txt","r")
+data=fi.read()
+client.send(data.encode('utf-8'))
+print("File sent successfully")
+fi.close()
+client.close()
+print("Connection Closed")
+
+--------------------------------------------------------------
+input.txt
+
+fgagqgquiegiqw
+--------------------------------------------------------------
+
+GO_BACK_N
+-----------
+
+GBN_SERVER::
+
+import socket
+import random
+server_address = ('localhost', 4345)
+receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+receiver_socket.bind(server_address)
+while True:
+    data, client_address = receiver_socket.recvfrom(1024)
+    packet = data.decode()
+    packet_number = int(packet.split()[1])
+    if random.random() < 0.2:
+        print(f"Received: {packet}, Acknowledgment not sent for packet {packet_number}")
+    else:
+        receiver_socket.sendto(str(packet_number).encode(), client_address)
+        print(f"Received: {packet}, Sent ACK: {packet_number}")
+receiver_socket.close()
+
+----------------------------------------
+
+GBN_CLIENT::
+----------------
+
+import socket
+import time
+server_address = ('localhost', 4345)
+window_size = 4
+sender_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+packets = ["Packet " + str(i) for i in range(10)]
+next_seq_num = 0
+base=0
+while base<10:
+    for i in range(next_seq_num, min(next_seq_num + window_size, len(packets))):
+        sender_socket.sendto(packets[i].encode(), server_address)
+        print(f"Sent: {packets[i]}")
+        time.sleep(1)
+    sender_socket.settimeout(2)
+    for j in range(window_size):
+        try:
+            ack, _ = sender_socket.recvfrom(1024)
+            ack_num = int(ack.decode())
+            print(f"Received ACK: {ack_num}")
+            if next_seq_num == ack_num:
+                next_seq_num+=1
+        except socket.timeout:
+            print("Timeout: No ACK received. Resending window.")
+            break;
+    base=next_seq_num
+sender_socket.close()
+
+-------------------------------------------------------
+SELECTIVE REPEAT:
+
+SR_SERVER::
+--------------
+
+import socket
+import random
+server_address = ('localhost', 4446)
+server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+server_socket.bind(server_address)
+window_size = 4
+expected_sequence_number = 0
+buffer={}
+while True:
+    data, client_address = server_socket.recvfrom(1024)
+    packet_number = int(data.decode())
+    if random.random() < 0.2:
+        print(f"Received: {packet_number}, Acknowledgment not sent for packet {packet_number}")
+    else:
+        buffer[packet_number] = packet_number
+        print(f"Sending ACK for {packet_number}")
+        server_socket.sendto(str(packet_number).encode(),client_address)
+        while expected_sequence_number in buffer:
+            expected_sequence_number+=1
+server_socket.close()
+
+----------------------------------------------------------------
+
+SR_CLIENT::
+-------------
+
+import socket
+import time
+sender_socket=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+server_address = ('localhost',4446)
+sequence_numbers = list(range(20))
+packets = [str(i) for i in sequence_numbers]
+base = 0
+window_size =4
+next_seq_num = 0
+count=0
+buffer = [False] * len(packets)
+while base < len(packets):
+    count=0
+    for i in range (next_seq_num,min(next_seq_num+window_size,len(packets))):
+        if not buffer[i]:
+            count+=1
+            sender_socket.sendto(packets[i].encode(), server_address)
+            print(f"Sent: {packets[i]}")
+    sender_socket.settimeout(2)
+    for j in range(count):
+        try:
+            ack, _ = sender_socket.recvfrom(1024)
+            ack_num = int(ack.decode())
+            print(f"Received ACK: {ack_num}")
+            buffer[ack_num] = True
+            while buffer[next_seq_num]:
+                next_seq_num+=1
+        except socket.timeout:
+            print("Timeout: No ACK received. Resending unacknowledged packets in the window.")
+    if count==0:
+        next_seq_num+=window_size
+        base=next_seq_num
+sender_socket.close()
+
+---------------------------------------------------------------------------
+                HTTP
+             ----------
+
+persistent_client:
+---------------------
+
+import http.client
+import sys
+
+print('input file name (ex. test.html): ', end='')
+file_name = input()
+print("Connection established")
+conn = http.client.HTTPConnection("localhost",3045)
+while file_name.lower() != 'exit':
+    conn.request("GET", "/" + file_name)
+
+    resp = conn.getresponse()
+    print(resp.status, resp.reason)
+
+    data = resp.read()
+    print(data.decode())
+
+
+    print('input file name (ex. test.html): ', end='')
+    file_name = input()
+conn.close()
+print('Connection terminated and Exiting...')
+
+-----------------------------------------------------
+persistent_server:
+-------------------
+
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import time
+
+class Server(BaseHTTPRequestHandler):
+
+    def do_GET(self):
+        try:
+            with open(self.path[1:], 'rb') as f:
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                self.wfile.write(f.read())
+        except FileNotFoundError:
+            self.send_response(404)
+            self.end_headers()
+
+httpd = HTTPServer(('localhost', 3045), Server)
+print('http server is starting...')
+print('http server is running...')
+httpd.serve_forever()
+
+------------------------------------------------------------------
+Non-persistent
+--------------
+
+non_persistent_server:
+---------------------------
+
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import time
+
+class Server(BaseHTTPRequestHandler):
+
+    def do_GET(self):
+        try:
+            with open(self.path[1:], 'rb') as f:
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                self.wfile.write(f.read())
+        except FileNotFoundError:
+            self.send_response(404)
+            self.end_headers()
+
+httpd = HTTPServer(('localhost', 3060), Server)
+print('http server is starting...')
+print('http server is running...')
+httpd.serve_forever()
+----------------------------------------------------
+
+non_persistent_client:
+------------------------
+
+import http.client
+import sys
+import time
+
+print('input file name (ex. test.html): ', end='')
+file_name = input()
+print("Connection establishing")
+while file_name.lower() != 'exit':
+    conn = http.client.HTTPConnection("localhost", 3060)
+    conn.request("GET", "/" + file_name)
+
+    resp = conn.getresponse()
+    print(resp.status, resp.reason)
+
+    data = resp.read()
+    print(data.decode())
+
+    conn.close()
+    print("Connection terminated...")
+    time.sleep(3)
+    print('input file name (ex. test.html): ', end='')
+    file_name = input()
+
+print('Exiting...')
+
+----------------------------------------------------------
+
+stop and wait
+----------------
+import random
+import time
+
+def simulate_network_delay():
+    return random.randint(1, 3)
+
+def sender(frame):
+    print(f"Sender: Sending frame {frame}")
+    time.sleep(simulate_network_delay())  # Simulate network delay
+    return frame
+
+def receiver(expected_frame, frames_to_send):
+    time.sleep(simulate_network_delay())  # Simulate network delay
+    received_frame = expected_frame if random.random() < 0.9 else None  # Simulate packet loss
+    if received_frame is not None:
+        print(f"Receiver: Received frame {received_frame}")
+    else:
+        print(f"Receiver: Frame {expected_frame} not received")
+    return received_frame
+
+def main():
+    frames_to_send = 5
+    frame_expected = 0
+    sent_frame = sender(0)  # Store the return value of sender
+    while frame_expected < frames_to_send:
+        ack_received = receiver(frame_expected, frames_to_send)
+        if ack_received == frame_expected:
+            frame_expected += 1
+            sent_frame = sender(frame_expected)  # Store the return value of sender
+        else:
+            print("Sender: Timeout, resending frame", frame_expected)
+    print(f"Receiver: Received frame {frames_to_send}")
+
+if name == "main":
+    main()
+
+
+------------------------------------------------------------------
+UDP MULTIPLE MESSAGE FROM CLIENT
+----
+UDP CLIENT
+import socket
+
+
+def client_program():
+    client_socket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+    server_address = ('127.0.0.1',3035)
+
+    while True:
+        message = input("Enter the message to send (or stop to quit): ")
+        client_socket.sendto(message.encode('utf-8'),server_address)
+        if message =="stop":
+            print("Ending connection")
+            break
+        response, server_address = client_socket.recvfrom(1024)
+        print(f"Received from server: {response.decode('utf-8')}")
+    client_socket.close()
+
+if _name=="main_":
+    client_program()
+
+--------------------------
+UDP SERVER
+------
+import socket
+
+def server_program():
+    server_socket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+    server_address = ('127.0.0.1',3035)
+    server_socket.bind(server_address)
+    while True:
+        data,clientaddr = server_socket.recvfrom(1024)
+        message = data.decode('utf-8')
+        if message == "stop":
+            print("End of connection")
+            break
+        response = "OK"
+        server_socket.sendto(response.encode('utf-8'),clientaddr)
+
+    server_socket.close()
+if _name_ =="_main_":
+    server_program()
