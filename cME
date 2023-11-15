@@ -1,0 +1,462 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+****************** tcpclient******************
+  
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <string.h>
+
+#define N 100
+#define PORT 6535
+
+int main() {
+        int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        struct sockaddr_in serv_addr;
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_port = htons(PORT);
+        serv_addr.sin_addr.s_addr = INADDR_ANY;
+        int status = connect(sockfd, (struct sockaddr* ) &serv_addr, sizeof(serv_addr));
+
+
+        if (status == -1) {
+                printf("error i making connection\n");
+                return 0;
+        }
+
+        printf("connection established\n");
+
+        char buffer_rec2[N];
+        char buffer_send2[N];
+
+        while(1) {
+
+                recv(sockfd, buffer_rec2, sizeof(buffer_send2), 0);
+
+                printf("\nSERVER: %s\n");
+                if ( strcmp (buffer_rec2, "exit") == 0) {
+                        break;
+                }
+
+
+                printf("\nCLIENT: ");
+
+                gets(buffer_send2);
+                if ( strcmp (buffer_send2, "exit") == 0) {
+                        send(sockfd, buffer_send2, sizeof(buffer_send2), 0);
+                        break;
+                }
+
+                send(sockfd, buffer_send2, sizeof(buffer_send2), 0);
+
+        }
+        close(sockfd);  return 0;
+} //end of main
+
+
+
+****************** tcpserver ******************
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <string.h>
+
+#define N 100
+#define PORT 6535
+
+int main() {
+        int serv_sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        struct sockaddr_in serv_addr;
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_port = htons(PORT);
+        serv_addr.sin_addr.s_addr = INADDR_ANY;
+
+        if ( bind (serv_sockfd, (struct sockaddr* ) &serv_addr, sizeof(serv_addr)) < 0 ) {
+                return 0;
+        }
+
+        if ( listen ( serv_sockfd, 1) < 0 ) {
+                return 0;
+        }
+
+        printf("server listening in port %d: \n", PORT);
+
+        int client_sockfd = accept( serv_sockfd, NULL, NULL);
+        char buffer_rec[N];
+        char buffer_send[N];
+
+        int count=0;
+
+        while(1) {
+                printf("\nSERVER: ");
+
+                gets(buffer_send);
+                if ( strcmp (buffer_send, "exit") == 0) {
+                        send(client_sockfd, buffer_send, sizeof(buffer_send), 0);
+                        break;
+                }
+
+                send(client_sockfd, buffer_send, sizeof(buffer_send), 0);
+                recv(client_sockfd, buffer_rec, sizeof(buffer_send), 0);
+
+                /*for ( int i=0; buffer_rec[i]!='\0'; i++) {
+                        if ( buffer_rec[i] == 1 ) {
+                                count++;
+                                if ( count == 5 ) {
+
+                                }
+                        }
+
+                        else if ( buffer_rec[i] == 0) { count = 0; }
+                */
+
+                printf("\nCLIENT: %s\n", buffer_rec);
+
+                if (strcmp(buffer_rec, "exit") == 0) {
+                        break;
+                }
+
+        }
+        close(serv_sockfd);     return 0;
+} //end of main
+
+-----------------------------------------------------------------------------------------------------------------------
+
+ ****************** ftpserver ******************
+  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#define PORT 6539
+
+void sendFile(int clientSocket, char* filename) {
+    FILE* file = fopen(filename, "rb");
+    if (!file) {
+        perror("File not found");
+        return;
+    }
+
+    fseek(file, 0, SEEK_END);
+    long fileSize = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    send(clientSocket, &fileSize, sizeof(long), 0);
+
+    char buffer[1024];
+    while (1) {
+        size_t bytesRead = fread(buffer, 1, sizeof(buffer), file);
+        if (bytesRead <= 0) break;
+        send(clientSocket, buffer, bytesRead, 0);
+    }
+
+    fclose(file);
+}
+
+int main() {
+    int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverSocket == -1) {
+        perror("Socket creation failed");
+        return -1;
+    }
+
+    struct sockaddr_in serverAddr;
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(PORT);
+    serverAddr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(serverSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == -1) {
+        perror("Binding failed");
+        return -1;
+    }
+
+    if (listen(serverSocket, 5) == -1) {
+        perror("Listening failed");
+        return -1;
+    }
+
+    printf("FTP server started on port %d\n", PORT);
+
+    while (1) {
+        struct sockaddr_in clientAddr;
+        socklen_t clientAddrLen = sizeof(clientAddr);
+
+        int clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddr, &clientAddrLen);
+        if (clientSocket == -1) {
+            perror("Accept failed");
+            continue;
+        }
+
+        char clientIP[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &clientAddr.sin_addr, clientIP, sizeof(clientIP));
+        printf("Accepted connection from %s\n", clientIP);
+
+        char filename[256];
+        recv(clientSocket, filename, sizeof(filename), 0);
+        printf("Received request for file: %s\n", filename);
+
+        sendFile(clientSocket, filename);
+
+        close(clientSocket);
+        printf("Closed connection with %s\n", clientIP);
+    }
+        printf("hello");
+    close(serverSocket);
+    return 0;
+}
+
+
+****************** ftpclient ******************
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#define SERVER_IP "192.168.1.200"
+#define PORT 6538
+
+void receiveFile(int serverSocket, char* filename) {
+    long fileSize;
+    recv(serverSocket, &fileSize, sizeof(long), 0);
+
+    if (fileSize == -1) {
+        printf("File not found on server\n");
+        return;
+    }
+
+    FILE* file = fopen(filename, "wb");
+    if (!file) {
+        perror("Error creating file");
+        return;
+    }
+
+    char buffer[1024];
+    while (fileSize > 0) {
+        int bytesRead = recv(serverSocket, buffer, sizeof(buffer), 0);
+        if (bytesRead <= 0) break;
+        fwrite(buffer, 1, bytesRead, file);
+        fileSize -= bytesRead;
+    }
+
+    fclose(file);
+    printf("File received successfully\n");
+}
+
+int main() {
+
+    int clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (clientSocket == -1) {
+        perror("Socket creation failed");
+        return -1;
+    }
+
+    struct sockaddr_in serverAddr;
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(PORT);
+    serverAddr.sin_addr.s_addr = inet_addr(SERVER_IP);
+
+    if (connect(clientSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == -1) {
+        perror("Connection failed");
+        return -1;
+    }
+
+    char filename[256];
+    int choice;
+    while (1) {
+            printf("1.file transfer \n2.exit to close connection\n: ");
+    scanf("%d", &choice);
+
+        if ( choice == 1) {
+                printf("enter file name: ");
+                scanf("%s", filename);
+
+                send(clientSocket, filename, sizeof(filename), 0);
+                receiveFile(clientSocket, filename);
+        }
+
+        else if (choice == 2) { printf("connectionclosed."); close(clientSocket); return 0;}
+   /* send(clientSocket, filename, sizeof(filename), 0);
+
+    receiveFile(clientSocket, filename);
+
+    close(clientSocket);
+*/  }
+        return 0;
+
+}
+
+----------------------------------------------------------------------------------------------------------------------------------
+
+****************** flowreceiver ****************** 
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#define RECEIVER_PORT 6536
+#define MAX_PACKET_SIZE 100
+
+int sockfd;
+struct sockaddr_in serverAddr, clientAddr;
+socklen_t addr_len = sizeof(clientAddr);
+
+void process_packet(char* packet_data, int* next_expected_byte, int* advertised_window) {
+        int seq_num, data_start, data_end;
+        sscanf(packet_data, "SEQ=%d, DATA=%d-%d", &seq_num, &data_start, &data_end);
+
+        if (data_start == *next_expected_byte) {
+                *next_expected_byte = data_end + 1;
+                //printf("\n%d\n", *next_expected_byte);
+                *advertised_window -= (data_end - data_start + 1);
+        } else {
+                // Out-of-sequence packet
+        }
+}
+
+int main() {
+        sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+        if (sockfd < 0) {
+                perror("Socket creation failed");
+                exit(EXIT_FAILURE);
+        }
+
+        memset(&serverAddr, 0, sizeof(serverAddr));
+        serverAddr.sin_family = AF_INET;
+        serverAddr.sin_addr.s_addr = INADDR_ANY;
+        serverAddr.sin_port = htons(RECEIVER_PORT);
+
+        if (bind(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+                perror("Bind failed");
+                exit(EXIT_FAILURE);
+        }
+
+        int m = 600;
+        int i = 50;
+        int j = 200;
+        int k = 5;
+        int advertised_window = m;
+        int next_expected_byte = 0; int nnext_expected_byte;// = next_expected_byte;
+        char ack_data[MAX_PACKET_SIZE];
+        sprintf(ack_data, "ACK=%d, AW=%d", -1, advertised_window);
+        sendto(sockfd, ack_data, strlen(ack_data), 0, (struct sockaddr*)&clientAddr, sizeof(clientAddr));
+
+        while (advertised_window > 0) {
+                char packet_data[MAX_PACKET_SIZE];
+                int recv_bytes = recvfrom(sockfd, packet_data, sizeof(packet_data), 0, (struct sockaddr*)&clientAddr, &addr_len);
+                if (recv_bytes < 0) {
+                        perror("Packet receive error");
+                        continue;
+                }
+
+                packet_data[recv_bytes] = '\0';
+
+                process_packet(packet_data, &next_expected_byte, &advertised_window);
+                if( next_expected_byte >= 400) { nnext_expected_byte = 400; }
+                else { nnext_expected_byte = next_expected_byte; }
+                sprintf(ack_data, "ACK=%d, AW=%d", nnext_expected_byte, advertised_window);
+                sendto(sockfd, ack_data, strlen(ack_data), 0, (struct sockaddr*)&clientAddr, sizeof(clientAddr));
+
+                printf("Received: %s, ACK=%d, AW=%d\n", packet_data, nnext_expected_byte, advertised_window);
+        }
+
+        close(sockfd);
+
+        return 0;
+}
+
+
+****************** flowsender ******************
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#define RECEIVER_IP "127.0.0.1"
+#define RECEIVER_PORT 6536
+#define MAX_PACKET_SIZE 100
+
+int sockfd;
+struct sockaddr_in receiverAddr;
+
+void send_packet(int seq_num, int data_start, int data_end) {
+        char packet_data[MAX_PACKET_SIZE];
+        sprintf(packet_data, "SEQ=%d, DATA=%d-%d", seq_num, data_start, data_end);
+
+        sendto(sockfd, packet_data, strlen(packet_data), 0, (struct sockaddr*)&receiverAddr, sizeof(receiverAddr));
+}
+
+int main() {
+        sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+        if (sockfd < 0) {
+                perror("Socket creation failed");
+                exit(EXIT_FAILURE);
+        }
+
+        memset(&receiverAddr, 0, sizeof(receiverAddr));
+        receiverAddr.sin_family = AF_INET;
+        receiverAddr.sin_port = htons(RECEIVER_PORT);
+        inet_pton(AF_INET, RECEIVER_IP, &receiverAddr.sin_addr);
+
+        int n = 2500;
+        int MSS = 100;
+        int ISN = 0;
+        int m = 600;
+        int i = 50;
+        int j = 200;
+        int k = 5, kk=0;
+        int last_byte_sent = ISN - 1;
+        int last_byte_acknowledged = ISN - 1;
+        int effective_window = m;
+
+        while (effective_window > 0 && last_byte_sent < n) {
+                int data_start = last_byte_sent + 1;
+                int data_end = data_start + MSS - 1; kk++;
+
+                send_packet(data_start, data_start, data_end);
+
+                last_byte_sent = data_end;
+
+                char ack_data[MAX_PACKET_SIZE];
+                recvfrom(sockfd, ack_data, sizeof(ack_data), 0, NULL, NULL);
+                int ack_num, window;
+                sscanf(ack_data, "ACK=%d, AW=%d", &ack_num, &window);
+
+                last_byte_acknowledged = ack_num;
+                effective_window = window;
+                if ( last_byte_acknowledged >= 400) { ack_num = 400;}
+                printf("Sent: SEQ=%d, ACK=%d, AW=%d\n", data_start, ack_num, effective_window);
+        }
+  
+
+        close(sockfd);
+
+        return 0;
+}
+
+----------------------------------------------------------------------------------------------------------------------------------
+
+
+  
